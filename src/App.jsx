@@ -2,10 +2,9 @@ import React, { useEffect, useRef, useState } from "react";
 import Watcher from "./Watcher.jsx";
 
 export default function App() {
-  const [listening, setListening] = useState(false);
-  const [message, setMessage] = useState("");
-  const [reply, setReply] = useState("");
   const [status, setStatus] = useState("Ready");
+  const [heard, setHeard] = useState("");
+  const [reply, setReply] = useState("");
 
   const recognitionRef = useRef(null);
 
@@ -15,49 +14,51 @@ export default function App() {
       window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      setStatus("Voice unavailable");
+      setStatus("Speech recognition not supported");
       return;
     }
 
     const recognition = new SpeechRecognition();
 
+    recognition.lang = "en-US";
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.lang = "en-US";
+    recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
-      setListening(true);
       setStatus("Listening...");
-    };
-
-    recognition.onend = () => {
-      setListening(false);
-
-      if (status === "Listening...") {
-        setStatus("Processing...");
-      }
-    };
-
-    recognition.onerror = (event) => {
-      console.error(event);
-      setListening(false);
-      setStatus("Voice error");
+      setHeard("");
+      setReply("");
     };
 
     recognition.onresult = async (event) => {
       const text =
         event.results[0][0].transcript.trim();
 
-      setMessage(text);
-      setStatus("Thinking...");
+      console.log("MAYA HEARD:", text);
+
+      setHeard(text);
+      setStatus("Heard. Thinking...");
 
       await askMaya(text);
+    };
+
+    recognition.onerror = (event) => {
+      console.error("MIC ERROR:", event.error);
+
+      setStatus(`Microphone error: ${event.error}`);
+    };
+
+    recognition.onend = () => {
+      console.log("Recognition ended");
     };
 
     recognitionRef.current = recognition;
 
     return () => {
-      recognition.stop();
+      try {
+        recognition.stop();
+      } catch {}
     };
   }, []);
 
@@ -75,84 +76,79 @@ export default function App() {
 
       const data = await response.json();
 
+      console.log("MAYA API:", data);
+
       if (!response.ok) {
         throw new Error(
-          data.error || "Maya could not respond"
+          data.error || "API request failed"
         );
       }
 
-      const mayaReply = data.reply;
-
-      setReply(mayaReply);
+      setReply(data.reply);
       setStatus("Speaking...");
 
-      speak(mayaReply);
+      speak(data.reply);
     } catch (error) {
-      console.error(error);
+      console.error("MAYA ERROR:", error);
 
-      setReply(
-        "I'm having trouble connecting to my AI brain."
-      );
+      setStatus("AI connection error");
 
-      setStatus("Connection error");
+      setReply(error.message);
     }
   }
 
   function speak(text) {
     if (!window.speechSynthesis) {
-      setStatus("Speech unavailable");
+      setStatus("Speech output unavailable");
       return;
     }
 
     window.speechSynthesis.cancel();
 
-    const utterance =
-      new SpeechSynthesisUtterance(text);
+    const voice = new SpeechSynthesisUtterance(text);
 
-    utterance.lang = detectLanguage(text);
+    voice.lang = detectLanguage(text);
+    voice.rate = 0.95;
+    voice.pitch = 1.05;
+    voice.volume = 1;
 
-    utterance.rate = 0.94;
-    utterance.pitch = 1.05;
-    utterance.volume = 1;
-
-    utterance.onend = () => {
+    voice.onend = () => {
       setStatus("Ready");
     };
 
-    utterance.onerror = () => {
-      setStatus("Speech error");
+    voice.onerror = () => {
+      setStatus("Voice output error");
     };
 
-    window.speechSynthesis.speak(utterance);
+    window.speechSynthesis.speak(voice);
   }
 
   function detectLanguage(text) {
-    const bangla = /[\u0980-\u09FF]/;
-
-    return bangla.test(text)
+    return /[\u0980-\u09FF]/.test(text)
       ? "bn-BD"
       : "en-US";
   }
 
-  function startListening() {
-    if (!recognitionRef.current) return;
-
-    window.speechSynthesis.cancel();
-
-    setMessage("");
-    setReply("");
+  function listen() {
+    if (!recognitionRef.current) {
+      setStatus("Microphone unavailable");
+      return;
+    }
 
     try {
+      window.speechSynthesis.cancel();
       recognitionRef.current.start();
-    } catch {}
+    } catch (error) {
+      console.error(error);
+    }
   }
 
-  async function testMaya() {
-    setMessage("Hello Maya");
+  async function testAI() {
+    setHeard("Testing Maya...");
     setStatus("Thinking...");
 
     await askMaya(
-      "Introduce yourself briefly and tell me that you are ready to help me."
+      "Say hello to me and tell me that your AI brain is working."
     );
   }
 
@@ -179,9 +175,9 @@ export default function App() {
           {status}
         </div>
 
-        {message && (
+        {heard && (
           <div className="maya-message">
-            <strong>You:</strong> {message}
+            <strong>You:</strong> {heard}
           </div>
         )}
 
@@ -195,17 +191,16 @@ export default function App() {
 
           <button
             className="maya-button"
-            onClick={startListening}
-            disabled={listening}
+            onClick={listen}
           >
-            {listening ? "🎙 Listening..." : "🎙 Talk"}
+            🎙 Listen
           </button>
 
           <button
             className="maya-button"
-            onClick={testMaya}
+            onClick={testAI}
           >
-            ✦ Ask Maya
+            ✦ Test AI
           </button>
 
         </div>
