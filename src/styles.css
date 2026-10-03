@@ -4,13 +4,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(
-      circle at center,
-      #0b1425 0%,
-      #05070d 45%,
-      #020308 100%
-    );
+  background: radial-gradient(
+    circle at center,
+    #0b1425 0%,
+    #05070d 45%,
+    #020308 100%
+  );
   overflow: hidden;
 }
 
@@ -26,8 +25,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  filter:
-    drop-shadow(0 0 20px rgba(22, 140, 255, 0.18))
+  filter: drop-shadow(0 0 20px rgba(22, 140, 255, 0.18))
     drop-shadow(0 0 55px rgba(22, 140, 255, 0.08));
 }
 
@@ -37,10 +35,7 @@
   align-items: center;
   gap: 8px;
   color: #dce9ff;
-  font-family:
-    Inter,
-    system-ui,
-    sans-serif;
+  font-family: Inter, system-ui, sans-serif;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.28em;
@@ -58,10 +53,7 @@
 
 .maya-subtitle {
   color: rgba(220, 233, 255, 0.42);
-  font-family:
-    Inter,
-    system-ui,
-    sans-serif;
+  font-family: Inter, system-ui, sans-serif;
   font-size: 11px;
   letter-spacing: 0.08em;
 }
