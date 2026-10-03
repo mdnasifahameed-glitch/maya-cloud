@@ -1,20 +1,24 @@
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({
+      error: "Method not allowed",
+    });
   }
 
   try {
     const { message } = req.body || {};
 
     if (!message) {
-      return res.status(400).json({ error: "Message is required" });
+      return res.status(400).json({
+        error: "Message is required",
+      });
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
 
     if (!apiKey) {
       return res.status(500).json({
-        error: "OPENAI_API_KEY is missing in Vercel",
+        error: "OPENAI_API_KEY is missing",
       });
     }
 
@@ -22,28 +26,28 @@ export default async function handler(req, res) {
       "https://api.openai.com/v1/responses",
       {
         method: "POST",
+
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
+
         body: JSON.stringify({
-          model: "gpt-5.6",
+          model: "gpt-6-luna",
+
           instructions: `
-You are Maya, the user's personal AI assistant.
+You are Maya, a personal AI assistant.
 
-Personality:
-- Natural
-- Warm
-- Intelligent
-- Calm
-- Helpful
-- Female voice/persona
-- Can speak English or Bangla/Banglish naturally
-- Do not sound robotic
-- Keep answers conversational unless the user asks for detail
+You are warm, intelligent, calm and natural.
+Speak naturally like a real female personal assistant.
+The user can speak English, Bangla, or Banglish.
+Reply in the same language the user uses.
 
-The user may call you Maya.
+Do not introduce yourself unnecessarily.
+Do not repeat the user's question.
+Be concise for simple requests and detailed when needed.
 `,
+
           input: message,
         }),
       }
@@ -52,17 +56,24 @@ The user may call you Maya.
     const data = await response.json();
 
     if (!response.ok) {
+      console.error("OpenAI error:", data);
+
       return res.status(response.status).json({
-        error: data?.error?.message || "AI request failed",
+        error:
+          data?.error?.message ||
+          "OpenAI request failed",
       });
     }
 
     return res.status(200).json({
       reply:
         data.output_text ||
-        "Sorry, I couldn't generate a response.",
+        "I received your message but couldn't generate a response.",
     });
+
   } catch (error) {
+    console.error(error);
+
     return res.status(500).json({
       error: error.message || "Server error",
     });
