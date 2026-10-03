@@ -1,137 +1,194 @@
-import { useEffect, useRef, useId } from "react";
-import PropTypes from "prop-types";
+import React, { useEffect, useRef } from "react";
 
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-
-export default function Watcher({ size = 180, follow = 70, bounce = 30 }) {
+export default function Watcher({
+  size = 300,
+  follow = 70,
+  bounce = 30,
+}) {
   const boxRef = useRef(null);
-  const leftEyeRef = useRef(null);
-  const rightEyeRef = useRef(null);
-  const gradientId = `${useId().replace(/:/g, "")}-body`;
+  const leftRef = useRef(null);
+  const rightRef = useRef(null);
 
   useEffect(() => {
     const box = boxRef.current;
-    const leftEye = leftEyeRef.current;
-    const rightEye = rightEyeRef.current;
+    const left = leftRef.current;
+    const right = rightRef.current;
 
-    if (!box || !leftEye || !rightEye) return undefined;
+    if (!box || !left || !right) return;
 
-    let animationFrame = 0;
+    let frame;
+    let blinkTimer;
 
     const state = {
       x: 0,
       y: 0,
-      targetX: 0,
-      targetY: 0,
+      tx: 0,
+      ty: 0,
       vx: 0,
       vy: 0,
-      last: performance.now(),
     };
 
-    const handlePointerMove = (event) => {
-      const rect = box.getBoundingClientRect();
-      const dx = event.clientX - (rect.left + rect.width / 2);
-      const dy = event.clientY - (rect.top + rect.height / 2);
+    const move = (e) => {
+      const r = box.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+
+      const dx = e.clientX - cx;
+      const dy = e.clientY - cy;
       const distance = Math.hypot(dx, dy) || 1;
-      const maxDistance = Math.max(window.innerWidth, window.innerHeight);
-      const amount = clamp(distance / maxDistance, 0, 1);
-      const strength = clamp(follow / 100, 0, 1);
 
-      state.targetX = (dx / distance) * amount * strength;
-      state.targetY = (dy / distance) * amount * strength;
+      const strength = Math.min(follow / 100, 1);
+
+      state.tx = Math.max(-1, Math.min(1, dx / distance)) * strength;
+      state.ty = Math.max(-1, Math.min(1, dy / distance)) * strength;
     };
 
-    const handlePointerLeave = () => {
-      state.targetX = 0;
-      state.targetY = 0;
-    };
+    const animate = () => {
+      state.vx += (state.tx - state.x) * 0.08;
+      state.vy += (state.ty - state.y) * 0.08;
 
-    const animate = (now) => {
-      const dt = Math.min(2, (now - state.last) / 16.67);
-      state.last = now;
+      state.vx *= 0.78 - bounce * 0.001;
+      state.vy *= 0.78 - bounce * 0.001;
 
-      const stiffness = 0.08;
-      const damping = 0.25 - (clamp(bounce, 0, 100) / 100) * 0.12;
+      state.x += state.vx;
+      state.y += state.vy;
 
-      state.vx +=
-        (state.targetX - state.x) * stiffness * dt - state.vx * damping * dt;
-      state.vy +=
-        (state.targetY - state.y) * stiffness * dt - state.vy * damping * dt;
+      const ox = state.x * 15;
+      const oy = state.y * 11;
 
-      state.x += state.vx * dt;
-      state.y += state.vy * dt;
-
-      const offsetX = state.x * 18;
-      const offsetY = state.y * 13;
-      const tilt = state.x * state.y * 35;
-
-      leftEye.setAttribute(
+      left.setAttribute(
         "transform",
-        `translate(${37 + offsetX} ${50 + offsetY}) rotate(${tilt})`
-      );
-      rightEye.setAttribute(
-        "transform",
-        `translate(${63 + offsetX} ${50 + offsetY}) rotate(${tilt})`
+        `translate(${37 + ox} ${50 + oy})`
       );
 
-      animationFrame = requestAnimationFrame(animate);
+      right.setAttribute(
+        "transform",
+        `translate(${63 + ox} ${50 + oy})`
+      );
+
+      frame = requestAnimationFrame(animate);
     };
 
-    const root = document.documentElement;
-    window.addEventListener("pointermove", handlePointerMove, {
-      passive: true,
-    });
-    root.addEventListener("pointerleave", handlePointerLeave);
-    animationFrame = requestAnimationFrame(animate);
+    const blink = () => {
+      left.style.transformOrigin = "center";
+      right.style.transformOrigin = "center";
+
+      left.animate(
+        [
+          { transform: "scaleY(1)" },
+          { transform: "scaleY(0.08)" },
+          { transform: "scaleY(1)" },
+        ],
+        {
+          duration: 180,
+          easing: "ease-in-out",
+        }
+      );
+
+      right.animate(
+        [
+          { transform: "scaleY(1)" },
+          { transform: "scaleY(0.08)" },
+          { transform: "scaleY(1)" },
+        ],
+        {
+          duration: 180,
+          easing: "ease-in-out",
+        }
+      );
+
+      blinkTimer = setTimeout(blink, 3500 + Math.random() * 3000);
+    };
+
+    window.addEventListener("pointermove", move, { passive: true });
+
+    frame = requestAnimationFrame(animate);
+    blinkTimer = setTimeout(blink, 2500);
 
     return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      root.removeEventListener("pointerleave", handlePointerLeave);
-      cancelAnimationFrame(animationFrame);
+      window.removeEventListener("pointermove", move);
+      cancelAnimationFrame(frame);
+      clearTimeout(blinkTimer);
     };
   }, [follow, bounce]);
-
-  const eye = (
-    <>
-      <rect x="-5" y="-9" width="10" height="18" rx="5" fill="#168cff" />
-      <circle cx="0" cy="-2" r="2.4" fill="#05070d" />
-    </>
-  );
 
   return (
     <div
       ref={boxRef}
       className="maya-watcher"
-      style={{ width: size, height: size }}
-      aria-label="Maya"
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+      }}
     >
-      <svg viewBox="0 0 100 100" width="100%" height="100%">
+      <svg
+        viewBox="0 0 100 100"
+        width="100%"
+        height="100%"
+        xmlns="http://www.w3.org/2000/svg"
+      >
         <defs>
-          <radialGradient id={gradientId} cx="35%" cy="30%" r="70%">
-            <stop offset="0%" stopColor="#1d3154" />
-            <stop offset="100%" stopColor="#08101f" />
+          <radialGradient
+            id="mayaBodyGradient"
+            cx="35%"
+            cy="30%"
+            r="70%"
+          >
+            <stop offset="0%" stopColor="#1b3154" />
+            <stop offset="100%" stopColor="#050b16" />
           </radialGradient>
         </defs>
 
-        <circle cx="50" cy="50" r="47" fill={`url(#${gradientId})`} />
+        <circle
+          cx="50"
+          cy="50"
+          r="47"
+          fill="url(#mayaBodyGradient)"
+        />
+
         <circle
           cx="50"
           cy="50"
           r="47"
           fill="none"
-          stroke="#263c61"
+          stroke="#29466f"
           strokeWidth="1"
         />
 
-        <g ref={leftEyeRef}>{eye}</g>
-        <g ref={rightEyeRef}>{eye}</g>
+        <g ref={leftRef}>
+          <rect
+            x="-5"
+            y="-9"
+            width="10"
+            height="18"
+            rx="5"
+            fill="#168cff"
+          />
+          <circle
+            cx="0"
+            cy="0"
+            r="2.5"
+            fill="#05070d"
+          />
+        </g>
+
+        <g ref={rightRef}>
+          <rect
+            x="-5"
+            y="-9"
+            width="10"
+            height="18"
+            rx="5"
+            fill="#168cff"
+          />
+          <circle
+            cx="0"
+            cy="0"
+            r="2.5"
+            fill="#05070d"
+          />
+        </g>
       </svg>
     </div>
   );
 }
-
-Watcher.propTypes = {
-  size: PropTypes.number,
-  follow: PropTypes.number,
-  bounce: PropTypes.number,
-};
