@@ -1,0 +1,21 @@
+/* MAYA WATCHER */
+.eyt {
+  width: 200px;
+  height: 200px;
+  display: grid;
+  place-items: center;
+}
+
+.eyt-ball {
+  width: var(--eyt-size, 100px);
+  height: var(--eyt-size, 100px);
+  overflow: visible;
+}
+
+.eyt-body {
+  fill: #101a2d;
+}
+
+.eyt-eye {
+  fill: #168cff;
+}
