@@ -1,3 +1,6 @@
+import React from "react";
+import { Watcher } from "./Watcher.jsx";
+
 export default function App() {
   return (
     <main
@@ -6,11 +9,15 @@ export default function App() {
         display: "grid",
         placeItems: "center",
         background: "#05070d",
-        color: "white",
-        fontSize: "40px",
       }}
     >
-      MAYA TEST
+      <Watcher
+        size={180}
+        shape="Ball"
+        eyes="Slant"
+        follow={60}
+        bounce={30}
+      />
     </main>
   );
 }
