@@ -23,52 +23,36 @@ export default async function handler(req, res) {
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+      "https://generativelanguage.googleapis.com/v1beta/interactions",
       {
         method: "POST",
 
         headers: {
           "Content-Type": "application/json",
+          "x-goog-api-key": apiKey,
         },
 
         body: JSON.stringify({
-          systemInstruction: {
-            parts: [
-              {
-                text: `
+          model: "gemini-3.5-flash-lite",
+
+          input: message,
+
+          system_instruction: `
 You are Maya, a personal AI assistant.
 
 You are warm, intelligent, calm and natural.
 
-The user may speak:
-- English
-- Bangla
-- Banglish
-
+The user may speak English, Bangla, or Banglish.
 Always reply in the same language the user uses.
 
-Be natural and conversational.
+Be conversational and natural.
 Do not unnecessarily introduce yourself.
 Do not repeat the user's question.
 Keep simple answers concise.
 Give detailed answers when needed.
 
 You are Maya, not Gemini.
-                `,
-              },
-            ],
-          },
-
-          contents: [
-            {
-              role: "user",
-              parts: [
-                {
-                  text: message,
-                },
-              ],
-            },
-          ],
+          `,
         }),
       }
     );
@@ -87,10 +71,16 @@ You are Maya, not Gemini.
     }
 
     const reply =
-      data?.candidates?.[0]?.content?.parts
-        ?.map((part) => part.text || "")
-        .join("")
-        .trim();
+      data?.outputs
+        ?.filter((output) => output?.type === "text")
+        ?.map((output) => output.text)
+        ?.join("")
+        ?.trim() ||
+      data?.steps
+        ?.filter((step) => step?.type === "text")
+        ?.map((step) => step.text)
+        ?.join("")
+        ?.trim();
 
     return res.status(200).json({
       reply:
