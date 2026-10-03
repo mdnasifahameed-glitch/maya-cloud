@@ -4,6 +4,7 @@ import Watcher from "./Watcher.jsx";
 export default function App() {
   const [listening, setListening] = useState(false);
   const [message, setMessage] = useState("");
+  const [reply, setReply] = useState("");
   const [status, setStatus] = useState("Ready");
 
   const recognitionRef = useRef(null);
@@ -31,63 +32,129 @@ export default function App() {
 
     recognition.onend = () => {
       setListening(false);
-      setStatus("Ready");
+
+      if (status === "Listening...") {
+        setStatus("Processing...");
+      }
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (event) => {
+      console.error(event);
       setListening(false);
       setStatus("Voice error");
     };
 
-    recognition.onresult = (event) => {
+    recognition.onresult = async (event) => {
       const text =
-        event.results[0][0].transcript;
+        event.results[0][0].transcript.trim();
 
       setMessage(text);
-      setStatus("Heard");
+      setStatus("Thinking...");
+
+      await askMaya(text);
     };
 
     recognitionRef.current = recognition;
 
-    return () => recognition.stop();
+    return () => {
+      recognition.stop();
+    };
   }, []);
 
-  const startListening = () => {
-    if (!recognitionRef.current) return;
-
+  async function askMaya(text) {
     try {
-      recognitionRef.current.start();
-    } catch {}
-  };
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: text,
+        }),
+      });
 
-  const speak = (text) => {
-    if (!window.speechSynthesis) return;
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Maya could not respond"
+        );
+      }
+
+      const mayaReply = data.reply;
+
+      setReply(mayaReply);
+      setStatus("Speaking...");
+
+      speak(mayaReply);
+    } catch (error) {
+      console.error(error);
+
+      setReply(
+        "I'm having trouble connecting to my AI brain."
+      );
+
+      setStatus("Connection error");
+    }
+  }
+
+  function speak(text) {
+    if (!window.speechSynthesis) {
+      setStatus("Speech unavailable");
+      return;
+    }
 
     window.speechSynthesis.cancel();
 
     const utterance =
       new SpeechSynthesisUtterance(text);
 
-    utterance.lang = "en-US";
-    utterance.rate = 0.95;
+    utterance.lang = detectLanguage(text);
+
+    utterance.rate = 0.94;
     utterance.pitch = 1.05;
+    utterance.volume = 1;
+
+    utterance.onend = () => {
+      setStatus("Ready");
+    };
+
+    utterance.onerror = () => {
+      setStatus("Speech error");
+    };
 
     window.speechSynthesis.speak(utterance);
-  };
+  }
 
-  const testMaya = () => {
-    const reply =
-      "Hello. I am Maya. I am ready.";
+  function detectLanguage(text) {
+    const bangla = /[\u0980-\u09FF]/;
 
-    setMessage(reply);
-    setStatus("Speaking");
+    return bangla.test(text)
+      ? "bn-BD"
+      : "en-US";
+  }
 
-    speak(reply);
+  function startListening() {
+    if (!recognitionRef.current) return;
 
-    setTimeout(() => {
-      setStatus("Ready");
-    }, 2500);
-  };
+    window.speechSynthesis.cancel();
+
+    setMessage("");
+    setReply("");
+
+    try {
+      recognitionRef.current.start();
+    } catch {}
+  }
+
+  async function testMaya() {
+    setMessage("Hello Maya");
+    setStatus("Thinking...");
+
+    await askMaya(
+      "Introduce yourself briefly and tell me that you are ready to help me."
+    );
+  }
 
   return (
     <main className="maya-app">
@@ -114,7 +181,13 @@ export default function App() {
 
         {message && (
           <div className="maya-message">
-            {message}
+            <strong>You:</strong> {message}
+          </div>
+        )}
+
+        {reply && (
+          <div className="maya-message">
+            <strong>Maya:</strong> {reply}
           </div>
         )}
 
@@ -123,15 +196,16 @@ export default function App() {
           <button
             className="maya-button"
             onClick={startListening}
+            disabled={listening}
           >
-            🎙 Talk
+            {listening ? "🎙 Listening..." : "🎙 Talk"}
           </button>
 
           <button
             className="maya-button"
             onClick={testMaya}
           >
-            ✦ Test Maya
+            ✦ Ask Maya
           </button>
 
         </div>
