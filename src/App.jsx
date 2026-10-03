@@ -1,23 +1,25 @@
 import React from "react";
-import { Watcher } from "./Watcher.jsx";
+import Watcher from "./Watcher.jsx";
 
 export default function App() {
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        background: "#05070d",
-      }}
-    >
-      <Watcher
-        size={180}
-        shape="Ball"
-        eyes="Slant"
-        follow={60}
-        bounce={30}
-      />
+    <main className="maya-app">
+      <section className="maya-center">
+        <Watcher
+          size={300}
+          follow={70}
+          bounce={30}
+        />
+
+        <div className="maya-name">
+          <span className="maya-dot" />
+          MAYA
+        </div>
+
+        <div className="maya-subtitle">
+          Personal AI Assistant
+        </div>
+      </section>
     </main>
   );
 }
