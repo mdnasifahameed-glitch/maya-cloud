@@ -7,6 +7,7 @@ export default function App() {
   const [reply, setReply] = useState("");
 
   const recognitionRef = useRef(null);
+  const listeningRef = useRef(false);
 
   useEffect(() => {
     const SpeechRecognition =
@@ -14,7 +15,9 @@ export default function App() {
       window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      setStatus("Speech recognition not supported");
+      setStatus(
+        "Speech recognition is not supported in this browser"
+      );
       return;
     }
 
@@ -26,49 +29,176 @@ export default function App() {
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
+      listeningRef.current = true;
+
       setStatus("Listening...");
       setHeard("");
       setReply("");
     };
 
+    recognition.onspeechstart = () => {
+      setStatus("Hearing you...");
+    };
+
+    recognition.onspeechend = () => {
+      setStatus("Processing...");
+    };
+
     recognition.onresult = async (event) => {
       const text =
-        event.results[0][0].transcript.trim();
+        event?.results?.[0]?.[0]?.transcript?.trim();
+
+      if (!text) {
+        setStatus("I didn't hear anything");
+        return;
+      }
 
       console.log("MAYA HEARD:", text);
 
       setHeard(text);
-      setStatus("Heard. Thinking...");
+      setStatus("Thinking...");
 
       await askMaya(text);
     };
 
     recognition.onerror = (event) => {
-      console.error("MIC ERROR:", event.error);
+      console.error(
+        "MAYA MICROPHONE ERROR:",
+        event.error
+      );
 
-      setStatus(`Microphone error: ${event.error}`);
+      listeningRef.current = false;
+
+      const errors = {
+        "not-allowed":
+          "Microphone permission denied",
+
+        "service-not-allowed":
+          "Speech service is not allowed",
+
+        "audio-capture":
+          "No microphone was detected",
+
+        "no-speech":
+          "I didn't hear you",
+
+        "network":
+          "Speech recognition network error",
+
+        "aborted":
+          "Listening stopped",
+
+        "language-not-supported":
+          "Speech language is not supported",
+      };
+
+      setStatus(
+        errors[event.error] ||
+          `Microphone error: ${event.error}`
+      );
     };
 
     recognition.onend = () => {
-      console.log("Recognition ended");
+      listeningRef.current = false;
+
+      console.log("MAYA SPEECH RECOGNITION ENDED");
+
+      if (status === "Listening...") {
+        setStatus("Ready");
+      }
     };
 
     recognitionRef.current = recognition;
 
     return () => {
       try {
-        recognition.stop();
+        recognition.abort();
       } catch {}
+
+      recognitionRef.current = null;
     };
   }, []);
+
+  async function requestMicrophonePermission() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error(
+        "Your browser does not support microphone access."
+      );
+    }
+
+    const stream =
+      await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+
+    // We only need the permission.
+    // SpeechRecognition will use the microphone itself.
+    stream.getTracks().forEach((track) => {
+      track.stop();
+    });
+  }
+
+  async function listen() {
+    const recognition = recognitionRef.current;
+
+    if (!recognition) {
+      setStatus(
+        "Speech recognition is not supported in this browser"
+      );
+      return;
+    }
+
+    if (listeningRef.current) {
+      return;
+    }
+
+    try {
+      window.speechSynthesis?.cancel();
+
+      setStatus("Checking microphone...");
+
+      await requestMicrophonePermission();
+
+      setStatus("Listening...");
+
+      recognition.start();
+
+    } catch (error) {
+      console.error(
+        "MAYA MICROPHONE START ERROR:",
+        error
+      );
+
+      if (error?.name === "NotAllowedError") {
+        setStatus(
+          "Microphone permission denied — allow microphone access"
+        );
+      } else if (error?.name === "NotFoundError") {
+        setStatus(
+          "No microphone found"
+        );
+      } else if (error?.name === "NotReadableError") {
+        setStatus(
+          "Microphone is being used by another app"
+        );
+      } else {
+        setStatus(
+          error?.message ||
+            "Could not start microphone"
+        );
+      }
+    }
+  }
 
   async function askMaya(text) {
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
+
         headers: {
           "Content-Type": "application/json",
         },
+
         body: JSON.stringify({
           message: text,
         }),
@@ -80,7 +210,14 @@ export default function App() {
 
       if (!response.ok) {
         throw new Error(
-          data.error || "API request failed"
+          data?.error ||
+            "Maya AI request failed"
+        );
+      }
+
+      if (!data?.reply) {
+        throw new Error(
+          "Maya returned an empty response"
         );
       }
 
@@ -88,35 +225,53 @@ export default function App() {
       setStatus("Speaking...");
 
       speak(data.reply);
+
     } catch (error) {
-      console.error("MAYA ERROR:", error);
+      console.error(
+        "MAYA AI ERROR:",
+        error
+      );
 
       setStatus("AI connection error");
-
-      setReply(error.message);
+      setReply(
+        error?.message ||
+          "Maya could not connect to her AI."
+      );
     }
   }
 
   function speak(text) {
     if (!window.speechSynthesis) {
-      setStatus("Speech output unavailable");
+      setStatus(
+        "Speech output is not supported"
+      );
       return;
     }
 
     window.speechSynthesis.cancel();
 
-    const voice = new SpeechSynthesisUtterance(text);
+    const voice =
+      new SpeechSynthesisUtterance(text);
 
     voice.lang = detectLanguage(text);
     voice.rate = 0.95;
     voice.pitch = 1.05;
     voice.volume = 1;
 
+    voice.onstart = () => {
+      setStatus("Speaking...");
+    };
+
     voice.onend = () => {
       setStatus("Ready");
     };
 
-    voice.onerror = () => {
+    voice.onerror = (event) => {
+      console.error(
+        "MAYA VOICE ERROR:",
+        event
+      );
+
       setStatus("Voice output error");
     };
 
@@ -124,31 +279,20 @@ export default function App() {
   }
 
   function detectLanguage(text) {
-    return /[\u0980-\u09FF]/.test(text)
-      ? "bn-BD"
-      : "en-US";
-  }
-
-  function listen() {
-    if (!recognitionRef.current) {
-      setStatus("Microphone unavailable");
-      return;
+    if (/[\u0980-\u09FF]/.test(text)) {
+      return "bn-BD";
     }
 
-    try {
-      window.speechSynthesis.cancel();
-      recognitionRef.current.start();
-    } catch (error) {
-      console.error(error);
-    }
+    return "en-US";
   }
 
   async function testAI() {
     setHeard("Testing Maya...");
+    setReply("");
     setStatus("Thinking...");
 
     await askMaya(
-      "Say hello to me and tell me that your AI brain is working."
+      "Say hello to me. Tell me briefly that Maya is online and her AI brain is working."
     );
   }
 
